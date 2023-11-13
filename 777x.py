@@ -1,8 +1,9 @@
+import os
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# Replace 'YOUR_TOKEN' with your actual Telegram bot token
-TOKEN = 'YOUR_TOKEN'
+# Retrieve the bot token from the environment variable
+TOKEN = os.environ.get('BOT_TOKEN')
 
 # Dictionary to store banned users
 banned_users = set()
