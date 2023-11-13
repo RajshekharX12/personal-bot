@@ -1,3 +1,4 @@
+import signal
 import requests
 from flask import Flask, request
 
@@ -17,6 +18,14 @@ def forward_message(from_chat_id, message_id):
         url = f"https://api.telegram.org/bot{bot_token}/forwardMessage"
         params = {"chat_id": chat_id, "from_chat_id": from_chat_id, "message_id": message_id}
         requests.post(url, json=params)
+
+def handle_shutdown(signum, frame):
+    print("Received signal {}, shutting down gracefully...".format(signum))
+    # Perform any necessary cleanup or save state before shutting down
+    exit(0)
+
+# Register the signal handler
+signal.signal(signal.SIGTERM, handle_shutdown)
 
 @app.route(f"/{bot_token}", methods=["POST"])
 def handle_updates():
