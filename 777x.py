@@ -1,66 +1,56 @@
-import os
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import requests
+from flask import Flask, request
 
-# Retrieve the bot token from the environment variable
-TOKEN = os.environ.get('BOT_TOKEN')
-
-# Dictionary to store banned users
+app = Flask(__name__)
+bot_token = "YOUR_TELEGRAM_BOT_TOKEN"
+admin_chat_id = "YOUR_ADMIN_CHAT_ID"
+user_chat_ids = set()
 banned_users = set()
 
-def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text('Hello! I am your personal bot.')
+def send_message(chat_id, text):
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    params = {"chat_id": chat_id, "text": text}
+    requests.post(url, json=params)
 
-def echo(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.from_user.id
+def forward_message(from_chat_id, message_id):
+    for chat_id in user_chat_ids:
+        url = f"https://api.telegram.org/bot{bot_token}/forwardMessage"
+        params = {"chat_id": chat_id, "from_chat_id": from_chat_id, "message_id": message_id}
+        requests.post(url, json=params)
 
-    # Check if user is banned
-    if user_id in banned_users:
-        update.message.reply_text('You are banned. Contact admin for assistance.')
-        return
+@app.route(f"/{bot_token}", methods=["POST"])
+def handle_updates():
+    update = request.get_json()
 
-    # Echo the user's message
-    update.message.reply_text(update.message.text)
+    if "message" in update:
+        message = update["message"]
+        chat_id = message["chat"]["id"]
+        user_id = message["from"]["id"]
 
-def ban(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.from_user.id
+        if user_id in banned_users:
+            return "You are banned."
 
-    # Ban the user
-    banned_users.add(user_id)
-    update.message.reply_text(f'User {user_id} has been banned.')
+        if "text" in message:
+            text = message["text"]
 
-def unban(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.from_user.id
+            if text.startswith("/ban"):
+                banned_users.add(user_id)
+                send_message(chat_id, "You have been banned.")
+            elif text.startswith("/broadcast"):
+                broadcast_text = text.split("/broadcast ", 1)[1]
+                for user in user_chat_ids:
+                    send_message(user, broadcast_text)
+            else:
+                forward_message(chat_id, message["message_id"])
 
-    # Unban the user
-    if user_id in banned_users:
-        banned_users.remove(user_id)
-        update.message.reply_text(f'User {user_id} has been unbanned.')
-    else:
-        update.message.reply_text(f'User {user_id} is not banned.')
+        elif "photo" in message:
+            # Handle media messages
+            forward_message(chat_id, message["message_id"])
 
-def broadcast(update: Update, context: CallbackContext) -> None:
-    # Get the message to broadcast
-    message_text = ' '.join(context.args)
+        if chat_id != admin_chat_id:
+            user_chat_ids.add(chat_id)
 
-    # Broadcast the message to all users
-    for user_id in context.bot.users:
-        context.bot.send_message(chat_id=user_id, text=message_text)
+    return "OK"
 
-def main() -> None:
-    updater = Updater(TOKEN)
-
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, echo))
-    dp.add_handler(CommandHandler("ban", ban))
-    dp.add_handler(CommandHandler("unban", unban))
-    dp.add_handler(CommandHandler("broadcast", broadcast, pass_args=True))
-
-    updater.start_polling()
-
-    updater.idle()
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    app.run(port=5000)
