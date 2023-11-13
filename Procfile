@@ -1,1 +1,1 @@
-worker: python 777x.py
+web: gunicorn -b 0.0.0.0:$PORT 777x:app
